@@ -135,6 +135,7 @@ class SQLAlchemyBackend(BaseDataBackend):
 
     """
     KIND = 'sqlalchemy.conx'
+    PROMOTE = 'metadata'
 
     @classmethod
     def supports(cls, obj, name, insert=False, data_store=None, model_store=None, *args, **kwargs):

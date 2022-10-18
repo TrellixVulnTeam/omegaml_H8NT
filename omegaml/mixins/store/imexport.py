@@ -27,7 +27,7 @@ class ObjectImportExportMixin:
         backend = self.get_backend(name)
         if hasattr(backend, 'export'):
             return backend.export(name)
-        meta = self.metadata(name, raw=True)
+        meta = self.metadata(name)
         assert meta is not None, f"{name} is not in {self.prefix}"
         if not isinstance(local, OmegaExportArchive):
             archive = OmegaExporter.archive(local, store=self, fmt=fmt)
