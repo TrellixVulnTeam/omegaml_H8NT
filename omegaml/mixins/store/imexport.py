@@ -33,19 +33,32 @@ class ObjectImportExportMixin:
             archive = OmegaExporter.archive(local, store=self, fmt=fmt)
         else:
             archive = local
+        if 'versions' in meta.attributes:
+            # for versioned objects, we defer to the versioning mixin
+            # -- export specific version (@version tag in name)
+            # -- or all versions (no @version tag in name)
+            metas = self._versioned_metas(name)
+        else:
+            # no versions, just this very object
+            metas = [(meta, name)]
         with archive as arc:
-            arc.add(meta, asname=name, store=self)
+            for meta, asname in metas:
+                arc.add(meta, asname=asname, store=self)
         return arc
 
     def from_archive(self, local, name, fmt='omega', **kwargs):
-        self.drop(name, force=True)
-        meta = self._load_metadata(name)
         if not isinstance(local, OmegaExportArchive):
             archive = OmegaExporter.archive(local, store=self, fmt=fmt)
         else:
             archive = local
         with archive as arc:
-            meta = arc.extract(name, meta, asname=meta.name, store=self)
+            members = [(m, m.replace(self.prefix, '')) for m in arc.members
+                       if m == f'{self.prefix}{name}'
+                       or m.startswith(f'{self.prefix}{name}@')]
+            for arc_member, member in members:
+                self.drop(member, force=True)
+                meta = self._load_metadata(member)
+                meta = arc.extract(member, meta, asname=meta.name, store=self)
         return meta
 
     def _load_metadata(self, name, attributes=None, gridfile=None):
@@ -218,7 +231,7 @@ class OmegaExporter:
     ARCHIVERS = {
         'omega': 'omegaml.mixins.store.imexport.OmegaExportArchive',
     }
-    _temp_bucket = '__exporter' # used as the import target and source for promotion
+    _temp_bucket = '__exporter'  # used as the import target and source for promotion
 
     def __init__(self, omega):
         self.omega = omega
@@ -240,7 +253,8 @@ class OmegaExporter:
                         prefix, pattern = obj.split('/', 1)
                     except ValueError:
                         prefixes = [s.prefix for s in self.omega._stores]
-                        raise ValueError(f'Cannot parse {obj}. Specify objects as prefix/name, prefix is one of {prefixes}')
+                        raise ValueError(
+                            f'Cannot parse {obj}. Specify objects as prefix/name, prefix is one of {prefixes}')
                     store = self.omega.store_by_prefix(f'{prefix}/')
                     # if the pattern does not match in list, use it as a name
                     # e.g. mymodel@version1 will not show in list()
@@ -254,7 +268,7 @@ class OmegaExporter:
         return archive_path
 
     def from_archive(self, path, pattern=None, fmt='omega', promote=False,
-                     promote_to: Omega=None, progressfn=None):
+                     promote_to: Omega = None, progressfn=None):
         # for promotion, use a temp bucket for import and promotion source
         promote = promote or (promote_to is not None)
         promote_to = None if not promote else (promote_to or self.omega)
